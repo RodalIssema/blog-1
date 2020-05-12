@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="generator" content="Hugo 0.40.1" />
+
+
+<title>Functional Programming and Hidden Markov Models - Bayesian Statistics and Functional Programming </title>
+<meta property="og:title" content="Functional Programming and Hidden Markov Models - Bayesian Statistics and Functional Programming ">
+
+
+
+  
+
+
+
+
+
+
+
+
+<link href='//cdn.bootcss.com/highlight.js/9.11.0/styles/tomorrow-night-eighties.min.css' rel='stylesheet' type='text/css' />
+
+
+
+<link rel="stylesheet" href="/css/fonts.css" media="all">
+<link rel="stylesheet" href="/css/main.css" media="all">
+
+
+
+  </head>
+  <body>
+    <div class="wrapper">
+      <header class="header">
+        <nav class="nav">
+  <a href="/" class="nav-logo">
+    <img src="/images/picture_cropped.jpg"
+         width="50"
+         height="50"
+         alt="Logo">
+  </a>
+
+  <ul class="nav-links">
+    
+    <li><a href="/about/">About</a></li>
+    
+    <li><a href="/blog/">Blog</a></li>
+    
+    <li><a href="https://github.com/jonnylaw">GitHub</a></li>
+    
+    <li><a href="https://twitter.com/lawsy">Twitter</a></li>
+    
+  </ul>
+</nav>
+
+      </header>
+
+
+<main class="content" role="main">
+
+  <article class="article">
+    <h1 class="article-title">Functional Programming and Hidden Markov Models</h1>
+
+    
+
+    <div class="article-content">
+      <p>The hidden Markov model is a state-space model with a discrete latent state, <span class="math inline">\(x_{1:T}\)</span> and noisy observations <span class="math inline">\(y_{1:T}\)</span>. The model can be described mathematically as</p>
+<p><span class="math display">\[p(y_{1:T}, x_{1:T}) = p(x_1)p(y_1|x_1)\prod_{t=2}^Tp(y_t|x_t)p(x_t|x_{t-1})\]</span></p>
+<p>Where <span class="math inline">\(y_{1:T} = y_1, \dots, y_T\)</span> represents the sequence of observed values and <span class="math inline">\(x_{1:T} = x_1, \dots, x_T\)</span> is the sequence of latent, unobserved values. The state space is assumed to be finite and countable, <span class="math inline">\(X \in \{1,\dots,K\}\)</span> and the time gaps between each observation are constant. The observation distribution can be either continuous or discrete.</p>
+<p>The model can be visualised using a state-transition diagram where observed nodes are rectangular and latent nodes are circular. The arrows represent any transitions which can be made and also convey conditional independence assumptions in the Model. The state forms a first order Markov process, which means <span class="math inline">\(p(x_t|x_{t-1},\dots,x_1) = p(x_t|x_{t-1})\)</span> and each observation is conditionally independent of all others given the corresponding value of the latent state at that time, <span class="math inline">\(y_t \perp\!\!\!\perp y_{1:t-1},y_{t+1:T}\)</span></p>
+<div class="figure">
+<img src="/blog/hidden-markov-model_files/hmm.png" alt="state transition diagram for hmm" />
+<p class="caption">state transition diagram for hmm</p>
+</div>
+<div id="example-the-occasionally-dishonest-casino" class="section level2">
+<h2>Example: The occasionally dishonest casino</h2>
+<p>The casino can choose to use a fair dice, in which case the observation distribution is categorical with probabilities <span class="math inline">\(p = \{\frac{1}{6}, \frac{1}{6}, \frac{1}{6}, \frac{1}{6}, \frac{1}{6}, \frac{1}{6}\}\)</span>. The casino can also choose a loaded dice which has the following probabilities, <span class="math inline">\(p = \{\frac{1}{10}, \frac{1}{10}, \frac{1}{10}, \frac{1}{10}, \frac{1}{10}, \frac{1}{5}\}\)</span>, hence it is more likely to roll a six with the loaded dice.</p>
+<p>We want to infer when the casino is using the loaded dice, the latent state <span class="math inline">\(x \in \{L, F\}\)</span> for loaded and fair respectively. We assume we already know the transition matrix</p>
+<p><span class="math display">\[P = \begin{pmatrix}
+\alpha &amp; 1 - \alpha \\
+1 - \beta &amp; \beta
+\end{pmatrix}.\]</span></p>
+<p>The observation distribution is <span class="math inline">\(p(y_t|x_t = j)\)</span>. This implies we have a two element vector since the state can take one of two values <span class="math inline">\(j = \{L, F\}\)</span>.</p>
+<p>We can simulate data from this process by specifying values of the parameters, <span class="math inline">\(\alpha = 0.3\)</span> and <span class="math inline">\(\beta = 0.1\)</span>. This means if the casino is using the loaded dice we will transition to the fair dice with probability <span class="math inline">\(1 - \alpha\)</span> and if the casino is using the fair dice there is a <span class="math inline">\(1 - \beta\)</span> probability of transitioning to the loaded dice. The algorithm to simulate from this Hidden Markov model is</p>
+<ol style="list-style-type: decimal">
+<li>Specify the initial state of the dice, <span class="math inline">\(x_1 = L\)</span></li>
+<li>Simulate an initial observation conditional on the dice used, <span class="math inline">\(y_1 \sim p(y_1|x_1)\)</span></li>
+<li>Simulate the next transition by drawing from a categorical distribution with probabilities corresponding to the row of the transition matrix corresponding the current state, <span class="math inline">\(P_{x_t, \cdot}\)</span></li>
+<li>Simulate an observation conditional on the state, <span class="math inline">\(y_t \sim p(y_t|x_t)\)</span></li>
+<li>Repeat 3 - 4 until the desired number of realisations are simulated</li>
+</ol>
+<p>The plot below shows 300 simulations from the occasionally dishonest casino.</p>
+<p><img src="/blog/hidden-markov-model_files/figure-html/unnamed-chunk-5-1.png" width="672" /></p>
+</div>
+<div id="filtering" class="section level2">
+<h2>Filtering</h2>
+<p>Now we wish to identify when the casino is using the loaded dice. We can use the forward filtering algorithm. The first step of the forward algorithm is to the prediction step:</p>
+<p><span class="math display">\[p(x_t = k|y_{1:t-1}) = \sum_{j=1}^K p(x_t = k|x_{t-1}=j)p(x_{t-1}=k|y_{1:t-1})\]</span></p>
+<p>Then we observe a new value of the process <span class="math inline">\(y_t\)</span>, and perform the update step where we apply Bayes’ Theorem</p>
+<p><span class="math display">\[\begin{aligned}
+p(x_t = k \mid y_{1:t}) = p(x_t = k\mid y_t,y_{1:t-1}) &amp;= \frac{p(y_{t}|x_t = k, y_{1:t-1})p(x_t = k|y_{1:t-1})}{p(y_{t})} \\
+&amp;= \frac{p(y_{t}|x_t = k)p(x_t = k|y_{1:t-1})}{\sum_{j=1}^Kp(y_{t}|x_t = j)p(x_t = j|y_{1:t-1})}
+\end{aligned}\]</span></p>
+<p>Which can be calculated recursively by defining <span class="math inline">\(\alpha_t(k) = p(x_t = k \mid y_{1:t})\)</span> then we have the recursive update</p>
+<p><span class="math display">\[\begin{aligned}
+\alpha_t(k) &amp;= p(y_{t}|x_t = k)p(x_t = k|y_{1:t-1}) \\
+&amp;= p(y_{t}|x_t = k)\sum_{j=1}^Kp(x_t = k|x_{t-1} = j)p(x_{t-1}\mid y_{1:t-1})\\
+&amp;= p(y_{t}|x_t = k)\sum_{j=1}^Kp(x_t = k|x_{t-1} = j)\alpha_{t-1}(k)
+\end{aligned}\]</span></p>
+<p>Essentially we have use the posterior of the previous time point, <span class="math inline">\(\alpha_{t-1}(k)\)</span> as the prior for next observation. Then we advance the latent-state using the transition distribution <span class="math inline">\(p(x_t = k|x_{t-1} = j)\)</span> and calculate the likelihood of the observation at time <span class="math inline">\(t\)</span> using the observation distribution <span class="math inline">\(p(y_{t}|x_t = k)\)</span>.</p>
+<p>To implement the forward algorithm in <code>R</code> we can use a higher-order function, a <a href="https://en.wikipedia.org/wiki/Fold_%28higher-order_function%29">fold</a>, from the <code>R</code> package <a href="https://purrr.tidyverse.org/">purrr</a>. A higher-order function is a function which accepts a function as an argument or returns a function instead of a value such as a <code>double</code> or <code>int</code>. This might seem strange at first, but it is very useful and quite common in statistics. Consider maximising a function using an optimisation routine, we pass in a function and the initial arguments and the optimisation function and the function is evaluated at many different values until a plausible maximum is found. This is the basis of the <code>optim</code> function in R.</p>
+<p>Higher-order functions can be motivated by considering a foundational principle of functional programming, to write pure functions which do not mutate state. A pure function is one which returns the same output value for the same function arguments. This means we can’t mutate state by sampling random numbers, write to disk or a database etc. Advanced functional programming languages, such as Haskell, encapsulates this behaviour in Monads. However, Monads and other higher-kinded types are not present in <code>R</code>. While we can’t use all the useful elements of functional programming in <code>R</code>, we can use some, such as higher-order functions.</p>
+<p>One result of avoiding mutable state is that we can’t write a for-loop, since a for-loop has a counter which is mutated at each iteration (<code>i = i + 1</code>). To overcome this apparent obstacle we can use recursion. Consider the simple example of adding together all elements in a vector, if we are naive we can write a for-loop.</p>
+<pre class="r"><code>seq &lt;- 1:10
+total &lt;- 0
+for (i in seq_along(seq)) {
+  total = total + seq[i]
+}
+total</code></pre>
+<pre><code>## [1] 55</code></pre>
+<p>This implementation has two variables which are mutated to calculate the final results. To avoid mutating state, we can write a recursive function which calls itself.</p>
+<pre class="r"><code>loop &lt;- function(total, seq) {
+  if (length(seq) == 0) {
+    total
+  } else {
+    loop(total + seq[1], seq[-1])
+  }
+}
+
+loop(0, 1:10)</code></pre>
+<pre><code>## [1] 55</code></pre>
+<p><code>R</code> does not have <a href="https://en.wikipedia.org/wiki/Tail_call">tail-call elimination</a> and hence this recursive function will not work with long sequences, however it does not mutate any state. We can generalise this function to be a higher-order function.</p>
+<pre class="r"><code>fold &lt;- function(init, seq, f) {
+  if (length(seq) == 0) {
+    init
+  } else {
+    fold(f(init, seq[1]), seq[-1], f)
+  }
+}</code></pre>
+<p>Here the function <code>fold</code> applies the user-specified binary function <code>f</code> to the initial value <code>init</code> and the first element of the sequence. The result of applying <code>f</code> to these values is then used as the next initial value with the rest of the sequence. We can use this to calculate any binary reduction we can think of.</p>
+<pre class="r"><code>fold(1, seq, function(x, y) x * y)</code></pre>
+<pre><code>## [1] 3628800</code></pre>
+<p>This example is equivalent to the <code>reduce</code> function in <a href="https://purrr.tidyverse.org/">purrr</a>. <code>purrr::reduce</code> by default can be used to combine the elements of a vector or list using a binary function starting with the first element in the list. For instance we can calculate the sum of a vector of numbers</p>
+<pre class="r"><code>purrr::reduce(1:10, function(x, y) x + y)</code></pre>
+<pre><code>## [1] 55</code></pre>
+<p>We can also use the function shorthand provided in <code>purrr</code>, where <code>function(x, y) x + y</code> can be written <code>~ .x + .y</code>.</p>
+<p>Other arguments provided to the <code>reduce</code> function can change its behaviour such as reversing the direction by changing the <code>.direction</code> argument (which will not affect the above computation, since addition is associative, ie. <span class="math inline">\((1 + (2 + 3)) = ((1 + 2) + 3)\)</span>). We can also provide an initial value (<code>.init</code>) to the computation, instead of starting with the first (or last) element of the list.</p>
+<p><code>purrr::accumulate</code> is similar to reduce, however it does not discard intermediate computations.</p>
+<pre class="r"><code>purrr::accumulate(1:10, `+`)</code></pre>
+<pre><code>##  [1]  1  3  6 10 15 21 28 36 45 55</code></pre>
+<p>Hence, if we change the direction this will change the output.</p>
+<pre class="r"><code>purrr::accumulate(1:10, `+`, .dir = &quot;backward&quot;)</code></pre>
+<pre><code>##  [1] 55 54 52 49 45 40 34 27 19 10</code></pre>
+<p>These functions can appear strange at first, however they don’t suffer from common problems such as off-by-one errors when writing a for-loop with indexing.</p>
+<p>The <code>accumulate</code> function can be used to write the forward algorithm by first writing a single step in the forward algorithm. The function <code>forward_step</code> accepts the current smoothed state at time t-1, <code>alpha</code>, and the observed value at time t, <code>y</code>. The arguments <code>observation</code> and <code>P</code> represent the observation distribution and the transition matrix respectively and remain constant in this example</p>
+<pre class="r"><code>forward_step &lt;- function(alpha, y, observation, P) {
+  normalise(observation(y) * t(P) %*% alpha)
+}</code></pre>
+<p>The forward algorithm can then be written using the <code>accumulate</code> function by first calculating the initial value of <code>alpha</code> and using this as the value <code>.init</code> then the function <code>forward_step</code> is used with the values of <code>observation</code> and <code>P</code> set. <code>accumulate</code> then takes uses the initial value, <code>.init</code> and the first value of the observations, <code>ys</code> (technically the second since we use the first to initialise <code>alpha</code>) to produce the next <code>alpha</code> value. This new <code>alpha</code> value is passed to the next invocation of <code>forward_step</code> along with the next observed value and so on until the observation vector is exhausted.</p>
+<pre class="r"><code>forward &lt;- function(ys, x0, observation, P) {
+  alpha &lt;- normalise(observation(ys[1]) * x0)
+  purrr::accumulate(
+    ys[-1],
+    forward_step,
+    observation = observation,
+    P = P,
+    .init = alpha
+  )
+}</code></pre>
+<p>We assume that the dice used for the initial roll can be either loaded or fair with equal probability.</p>
+<p><img src="/blog/hidden-markov-model_files/figure-html/unnamed-chunk-15-1.png" width="672" /></p>
+</div>
+<div id="parameter-inference" class="section level2">
+<h2>Parameter inference</h2>
+<p>We can calculate the log-probability of the evidence using the forward algorithm, this is the sum of un-normalised filtering distribution</p>
+<p><span class="math display">\[\log p(y_{1:T}) = \log \sum_{i=1}^T\sum_{j=1}^K p(x_t=j\mid y_{1:t-1})p(y_t|x_t = j)\]</span></p>
+<p>This can be used in a Metropolis-Hastings algorithm to determine the posterior distribution of the parameters in the transition matrix, <span class="math inline">\(\alpha\)</span> and <span class="math inline">\(\beta\)</span>. We can keep a running total of log-likelihood by returning a list from the forward step containing the log-likelihood and the posterior probability of the states given the observation.</p>
+<pre class="r"><code>ll_step &lt;- function(state, y, observation, P) {
+  unnorm_state &lt;- observation(y) * t(P) %*% state[[2]]
+  list(
+    state[[1]] + sum(log(unnorm_state)),
+    normalise(unnorm_state)
+  )
+}</code></pre>
+<p>To return only the log-likelihood we can use <code>purrr::reduce</code>.</p>
+<pre class="r"><code>log_likelihood &lt;- function(ys, x0, observation, P) {
+  alpha &lt;- normalise(observation(ys[1]) * x0)
+  init &lt;- list(0, alpha)
+  purrr::reduce(ys, function(x, y) ll_step(x, y, observation, P), .init = init)[[1]]
+}</code></pre>
+<p>We can use this marginal-likelihood in a Metropolis-Hastings algorithm. We define the prior on the parameters of the transition matrix to be independent Gamma distributions with shape, <span class="math inline">\(\alpha = 3\)</span>, and rate <span class="math inline">\(\beta = 3/0.1\)</span>. The log-posterior is the sum of the log-likelihood calculated using the forward filtering algorithm and the log-prior.</p>
+<p>The proposal distribution is a normal centered at the un-constrained value of the parameter. We use the logit function to transform <span class="math inline">\(\alpha\)</span> and <span class="math inline">\(\beta\)</span> from <span class="math inline">\(\operatorname{logit}:[0, 1] \rightarrow \mathbb{R}\)</span> then propose using a Normal distribution centered as the un-constrained value and proceed to transform the parameter back to the original scale using the logistic function, <span class="math inline">\(\operatorname{logistic}:\mathbb{R} \rightarrow [0, 1]\)</span>.</p>
+<p>We draw 10,000 iterations from the Metropolis algorithm, the parameter diagnostics are plotted below.</p>
+<p><img src="/blog/hidden-markov-model_files/figure-html/unnamed-chunk-20-1.png" width="672" /></p>
+</div>
+
+    </div>
+  </article>
+
+  
+
+
+</main>
+
+      <footer class="footer">
+        <ul class="footer-links">
+          <li>
+            <a href="/index.xml" type="application/rss+xml" target="_blank">RSS feed</a>
+          </li>
+          <li>
+            <a href="https://gohugo.io/" class="footer-links-kudos">Made with <img src="/images/hugo-logo.png" width="22" height="22"></a>
+          </li>
+        </ul>
+      </footer>
+
+    </div>
+    
+
+
+
+<script src="//cdn.bootcss.com/highlight.js/9.11.0/highlight.min.js"></script>
+
+
+
+<script src="//cdn.bootcss.com/highlight.js/9.11.0/languages/r.min.js"></script>
+<script src="//cdn.bootcss.com/highlight.js/9.11.0/languages/yaml.min.js"></script>
+<script src="//cdn.bootcss.com/highlight.js/9.11.0/languages/scala.min.js"></script>
+<script>hljs.configure({languages: []}); hljs.initHighlightingOnLoad();</script>
+
+
+
+    
+<script src="/js/math-code.js"></script>
+<script async src="//cdn.bootcss.com/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_CHTML"></script>
+
+
+    
+  </body>
+</html>
+
